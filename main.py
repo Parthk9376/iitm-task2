@@ -2,10 +2,13 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import jwt
 
+app = FastAPI()
+
 ISSUER = "https://idp.exam.local"
 AUDIENCE = "tds-gaogjv7o.apps.exam.local"
 
-PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----
+PUBLIC_KEY = """
+-----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2okOHspNjgA+2rTLbeuY
 cxiP/hG8C6Sb9iwg3yiLAA4HCnpITcbWCSelbvbYGuc3EbNy4xFyf5Cbj5DHJMID
 EkryOgyd2giIIIBOUBj8S63uGcnRpOBh9NFatfNwheKuzsPuVNldu6A9cNteNpXc
@@ -13,25 +16,29 @@ WyJjG2axVfmq7i6SuKr1JoWYG7xTTAvKPujSl4OtsQfO3h5NepzdfXpr28oNnzfW
 ed+zclR6BcmNNo/WVfJ4xyCLSf0BCOgdTgW6PdaChd1l9VDetJZVEgC5tkyvXsfI
 SI6iyrYbKR0NEBSqq4XkadEjsCs4F1RncsS4LlgniT7GlkL9Mce3b0wGLs9/7ZIX
 dQIDAQAB
------END PUBLIC KEY-----"""
-
-app = FastAPI()
-
-
-@app.get("/")
-def root():
-    return {"status": "ok"}
+-----END PUBLIC KEY-----
+"""
 
 
 class TokenRequest(BaseModel):
     token: str
 
 
+@app.get("/")
+def home():
+    return {"status": "ok"}
+
+
+@app.post("/")
+def home_post():
+    return {"status": "ok"}
+
+
 @app.post("/verify")
-def verify(req: TokenRequest):
+def verify(request: TokenRequest):
     try:
         payload = jwt.decode(
-            req.token,
+            request.token,
             PUBLIC_KEY,
             algorithms=["RS256"],
             issuer=ISSUER,
@@ -40,22 +47,45 @@ def verify(req: TokenRequest):
 
         return {
             "valid": True,
-            "email": payload.get("email"),
             "sub": payload.get("sub"),
+            "email": payload.get("email"),
             "aud": payload.get("aud"),
+            "iss": payload.get("iss"),
+            "exp": payload.get("exp"),
         }
 
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail={"valid": False})
+        raise HTTPException(
+            status_code=401,
+            detail={"valid": False, "error": "Token expired"},
+        )
 
     except jwt.InvalidAudienceError:
-        raise HTTPException(status_code=401, detail={"valid": False})
+        raise HTTPException(
+            status_code=401,
+            detail={"valid": False, "error": "Invalid audience"},
+        )
 
     except jwt.InvalidIssuerError:
-        raise HTTPException(status_code=401, detail={"valid": False})
+        raise HTTPException(
+            status_code=401,
+            detail={"valid": False, "error": "Invalid issuer"},
+        )
 
     except jwt.InvalidSignatureError:
-        raise HTTPException(status_code=401, detail={"valid": False})
+        raise HTTPException(
+            status_code=401,
+            detail={"valid": False, "error": "Invalid signature"},
+        )
 
-    except Exception:
-        raise HTTPException(status_code=401, detail={"valid": False})
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=401,
+            detail={"valid": False, "error": "Invalid token"},
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=401,
+            detail={"valid": False, "error": str(e)},
+        )
